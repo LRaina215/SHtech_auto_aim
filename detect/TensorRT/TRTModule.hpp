@@ -64,6 +64,7 @@ private:
 
     void cache_engine(const std::string &cache_file);
 
+    nvinfer1::IRuntime *runtime;
     nvinfer1::ICudaEngine *engine;
     nvinfer1::IExecutionContext *context;
     mutable void *device_buffer[2];

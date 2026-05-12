@@ -28,6 +28,9 @@ namespace detect
       }
 
       if (input.empty()) {
+        if (stats) {
+          stats->fail_stage = 1;
+        }
         return std::nullopt;
       }
 
@@ -104,6 +107,9 @@ namespace detect
         left_roi.x + left_roi.width >= input.cols || left_roi.y + left_roi.height >= input.rows ||
         right_roi.x <= 0 || right_roi.y <= 0 || right_roi.width <= 0 || right_roi.height <= 0 ||
         right_roi.x + right_roi.width >= input.cols || right_roi.y + right_roi.height >= input.rows) {
+        if (stats) {
+          stats->fail_stage = 2;
+        }
         return std::nullopt;
       }
 
@@ -123,6 +129,9 @@ namespace detect
       }
 
       if (left_lights.empty() || right_lights.empty()) {
+        if (stats) {
+          stats->fail_stage = 3;
+        }
         return std::nullopt;
       }
 
@@ -160,6 +169,11 @@ namespace detect
         stats->select_ms += duration_ms(t_select_start, Clock::now());
       }
 
+      if (stats && stats->successful_lights < 2) {
+        stats->fail_stage = 4;
+        return std::nullopt;
+      }
+
       const auto t_final_check_start = Clock::now();
       cv::Vec2f left_light_vector = optimized_corners[1] - optimized_corners[0];
       cv::Vec2f right_light_vector = optimized_corners[2] - optimized_corners[3];
@@ -185,6 +199,7 @@ namespace detect
       if (light_length_ratio < 0.7 || fabs(left_light_angle_deg - right_light_angle_deg) > 5) {
         if (stats) {
           stats->final_check_ms += duration_ms(t_final_check_start, Clock::now());
+          stats->fail_stage = 5;
         }
         return std::nullopt;
       }

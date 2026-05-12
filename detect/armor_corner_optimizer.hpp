@@ -32,6 +32,7 @@ namespace detect
 
     int candidate_light_bars = 0;
     int successful_lights = 0;
+    int fail_stage = 0;
   };
 
   // Light structure to represent a light bar

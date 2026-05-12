@@ -159,40 +159,88 @@ namespace predict
 
         std::vector<std::pair<bbox_t, double>> new_armors;
         std::vector<bbox_t> armors_in_tracking;
+        int color_rejected = 0;
+        int pnp_failed = 0;
+        int geometry_rejected = 0;
+        int source_rejected = 0;
+        int tracking_accepted = 0;
+        int new_accepted = 0;
+        int geometry_detail_printed = 0;
 
         // todo: 多个跟踪器实例test
         for (const auto &armor : detected_armors) {
             // 根据颜色和距离筛选装甲板�?并且如果装甲板已经在跟踪中，则加入到 armors_in_tracking 列表，否则筛选角点来源为传统视觉的装甲板加入到 new_armors 列表
-            if (armor.color_id == (robot_status.enemy_color==EnemyColor::BLUE)) {
-                float yaw_in_camera;
-                Eigen::Matrix<double, 4, 1> measurement;
-                bool success = coord_transformer.pnp_get_measurement(armor.pts, armor.tag_id, armor.color_id,
-                                                                                    attitude_yaw, R_world2imu, yaw_in_camera, measurement);
-                Pos3D m_pw(measurement(1, 0), measurement(0, 0), measurement(2, 0));
-                double dist = distance_3D(m_pw);
-                double height = m_pw(2, 0);
+            if (armor.color_id != (robot_status.enemy_color == EnemyColor::BLUE)) {
+                color_rejected++;
+                continue;
+            }
 
-                if (dist < max_distance_accept && abs(measurement(2, 0)) < max_yaw_accept && abs(height) < max_height_accept) {
-                    bool already_in_tracking = false;
-                    for (int i = 0; i < NUM_TRACKER; ++i) {
-                        if (trackers[i].get_tracker_state() != TrackingState::IDLE && armor.tag_id == tracked_armors[i].tag_id) {
-                            already_in_tracking = true;
-                            break;
-                        }
-                    }
+            float yaw_in_camera;
+            Eigen::Matrix<double, 4, 1> measurement;
+            bool success = coord_transformer.pnp_get_measurement(armor.pts, armor.tag_id, armor.color_id,
+                                                                                attitude_yaw, R_world2imu, yaw_in_camera, measurement);
+            if (!success) {
+                pnp_failed++;
+                continue;
+            }
 
-                    if (already_in_tracking) {
-                        armors_in_tracking.push_back(armor);
+            Pos3D m_pw(measurement(1, 0), measurement(0, 0), measurement(2, 0));
+            double dist = distance_3D(m_pw);
+            double height = m_pw(2, 0);
+
+            const double yaw = measurement(3, 0);
+            if (!(dist < max_distance_accept && abs(yaw) < max_yaw_accept && abs(height) < max_height_accept)) {
+                geometry_rejected++;
+                if (config_.debug.log_text && geometry_detail_printed < 4) {
+                    const cv::Point2f center = (armor.pts[0] + armor.pts[1] + armor.pts[2] + armor.pts[3]) * 0.25f;
+                    std::cout << "[predict] geometry reject detail: tag=" << armor.tag_id
+                              << " color=" << armor.color_id
+                              << " source=" << static_cast<int>(armor.source)
+                              << " center=(" << center.x << "," << center.y << ")"
+                              << " dist=" << dist << "/" << max_distance_accept
+                              << " yaw=" << yaw << "/" << max_yaw_accept
+                              << " height=" << height << "/" << max_height_accept
+                              << std::endl;
+                    geometry_detail_printed++;
+                }
+                continue;
+            }
+
+            bool already_in_tracking = false;
+            for (int i = 0; i < NUM_TRACKER; ++i) {
+                if (trackers[i].get_tracker_state() != TrackingState::IDLE && armor.tag_id == tracked_armors[i].tag_id) {
+                    already_in_tracking = true;
+                    break;
+                }
+            }
+
+            if (already_in_tracking) {
+                armors_in_tracking.push_back(armor);
+                tracking_accepted++;
+            }
+            else {
+                if (need_new_armors) {
+                    if (armor.source == DetectionSource::TRADITIONAL) {
+                        new_armors.push_back(std::make_pair(armor, dist));
+                        new_accepted++;
                     }
                     else {
-                        if (need_new_armors) {
-                            if (armor.source == DetectionSource::TRADITIONAL) {
-                                new_armors.push_back(std::make_pair(armor, dist));
-                            }
-                        }
+                        source_rejected++;
                     }
                 }
             }
+        }
+
+        if (config_.debug.log_text) {
+            std::cout << "[predict] filter summary: detected=" << detected_armors.size()
+                      << " new=" << new_accepted
+                      << " tracking=" << tracking_accepted
+                      << " color_reject=" << color_rejected
+                      << " pnp_fail=" << pnp_failed
+                      << " geometry_reject=" << geometry_rejected
+                      << " source_reject=" << source_rejected
+                      << " enemy_is_blue=" << (robot_status.enemy_color == EnemyColor::BLUE)
+                      << std::endl;
         }
 
         if (need_new_armors) {

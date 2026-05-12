@@ -24,7 +24,10 @@ if(INFERENCE_BACKEND STREQUAL "TRT")
         target_include_directories(detect PRIVATE $ENV{TRT_PATH}/include)
         target_link_directories(detect PRIVATE $ENV{TRT_PATH}/lib)
     else()
-        FILE(GLOB TRT_LIBS "/usr/lib/aarch64-linux-gnu/libnv*.so")
+        FILE(GLOB TRT_LIBS
+            "/usr/lib/aarch64-linux-gnu/libnv*.so"
+            "/usr/lib/x86_64-linux-gnu/libnv*.so"
+        )
     endif()
     
     target_link_libraries(detect ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${TRT_LIBS})

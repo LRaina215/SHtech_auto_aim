@@ -78,14 +78,18 @@ namespace detect
 
         if (config_.debug.show_image)
         {
-            static const cv::Scalar colors[3] = {{255, 0, 0}, {0, 0, 255}, {255, 255, 255}};
+            static const cv::Scalar colors[3] = {{255, 0, 0}, {0, 0, 255}, {0, 255, 0}};
             cv::Mat im2show = data->frame.clone();
             for (const auto &b : data->bboxes)
             {
-                cv::line(im2show, b.pts[0], b.pts[1], colors[2], 1);
-                cv::line(im2show, b.pts[1], b.pts[2], colors[2], 1);
-                cv::line(im2show, b.pts[2], b.pts[3], colors[2], 1);
-                cv::line(im2show, b.pts[3], b.pts[0], colors[2], 1);
+                cv::line(im2show, b.pts[0], b.pts[1], colors[2], 2);
+                cv::line(im2show, b.pts[1], b.pts[2], colors[2], 2);
+                cv::line(im2show, b.pts[2], b.pts[3], colors[2], 2);
+                cv::line(im2show, b.pts[3], b.pts[0], colors[2], 2);
+                for (const auto &pt : b.pts)
+                {
+                    cv::circle(im2show, pt, 3, colors[2], -1);
+                }
                 cv::putText(im2show, "N", b.pts[0], cv::FONT_HERSHEY_SIMPLEX, 1, colors[b.color_id]);
             }
 

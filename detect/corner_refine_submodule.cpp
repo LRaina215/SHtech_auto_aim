@@ -61,6 +61,7 @@ namespace detect
         int lights_attempted = static_cast<int>(data->bboxes.size()) * 2;
         int lights_success = 0;
         int candidate_light_bars = 0;
+        int fail_stages[6] = {};
 
         for (auto& bbox : data->bboxes)
         {
@@ -92,6 +93,9 @@ namespace detect
             } else {
                 bbox.source = DetectionSource::NEURAL_NETWORK;
                 armors_failed++;
+                if (stats.fail_stage >= 0 && stats.fail_stage < 6) {
+                    fail_stages[stats.fail_stage]++;
+                }
             }
         }
 
@@ -99,14 +103,18 @@ namespace detect
 
         if (config_.debug.show_image)
         {
-            static const cv::Scalar colors[3] = {{255, 0, 0}, {0, 0, 255}, {255, 255, 255}};
+            static const cv::Scalar colors[3] = {{255, 0, 0}, {0, 0, 255}, {0, 255, 0}};
             cv::Mat im2show = data->frame.clone();
             for (const auto &b : data->bboxes)
             {
-                cv::line(im2show, b.pts[0], b.pts[1], colors[2], 1);
-                cv::line(im2show, b.pts[1], b.pts[2], colors[2], 1);
-                cv::line(im2show, b.pts[2], b.pts[3], colors[2], 1);
-                cv::line(im2show, b.pts[3], b.pts[0], colors[2], 1);
+                cv::line(im2show, b.pts[0], b.pts[1], colors[2], 2);
+                cv::line(im2show, b.pts[1], b.pts[2], colors[2], 2);
+                cv::line(im2show, b.pts[2], b.pts[3], colors[2], 2);
+                cv::line(im2show, b.pts[3], b.pts[0], colors[2], 2);
+                for (const auto &pt : b.pts)
+                {
+                    cv::circle(im2show, pt, 3, colors[2], -1);
+                }
 
                 const char source_tag = b.source == DetectionSource::TRADITIONAL ? 'T' : 'N';
                 cv::putText(im2show,
@@ -142,6 +150,30 @@ namespace detect
             const int lights_failed = lights_attempted - lights_success;
             const double armor_count = static_cast<double>(data->bboxes.size());
 
+            LOGM_S("[corner_refine] Summary: armors=%zu success=%d fail=%d lights_attempted=%d lights_success=%d lights_fail=%d candidates=%d total=%.2lfms avg=%.2lfms",
+                   data->bboxes.size(),
+                   armors_success,
+                   armors_failed,
+                   lights_attempted,
+                   lights_success,
+                   lights_failed,
+                   candidate_light_bars,
+                   frame_total_ms,
+                   armor_count > 0.0 ? frame_total_ms / armor_count : 0.0);
+            LOGM_S("[corner_refine] Breakdown: roi=%.2lfms preprocess=%.2lfms find_light=%.2lfms select=%.2lfms final_check=%.2lfms visualize=%.2lfms",
+                   total_roi_ms,
+                   total_preprocess_ms,
+                   total_find_light_ms,
+                   total_select_ms,
+                   total_final_check_ms,
+                   total_visualize_ms);
+            LOGM_S("[corner_refine] FailStage: unknown=%d input=%d roi=%d no_light=%d select=%d final_check=%d",
+                   fail_stages[0],
+                   fail_stages[1],
+                   fail_stages[2],
+                   fail_stages[3],
+                   fail_stages[4],
+                   fail_stages[5]);
             LOGM_F("[corner_refine] Summary: armors=%zu success=%d fail=%d lights_attempted=%d lights_success=%d lights_fail=%d candidates=%d total=%.2lfms avg=%.2lfms",
                    data->bboxes.size(),
                    armors_success,
